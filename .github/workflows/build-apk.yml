@@ -51,17 +51,23 @@ jobs:
           fi
           ls -la $PROJECT_DIR
 
+      - name: Clean invalid settings from gradle.properties
+        run: |
+          # Remove sandbox-specific java.home and low-memory settings
+          sed -i '/org.gradle.java.home/d' $PROJECT_DIR/gradle.properties
+          sed -i '/MaxMetaspaceSize/d' $PROJECT_DIR/gradle.properties
+          # Ensure reasonable memory settings
+          if ! grep -q "org.gradle.jvmargs" $PROJECT_DIR/gradle.properties; then
+            echo "org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8" >> $PROJECT_DIR/gradle.properties
+          fi
+          echo "----- gradle.properties -----"
+          cat $PROJECT_DIR/gradle.properties
+
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > $PROJECT_DIR/local.properties
 
       - name: Grant execute permission
         run: chmod +x $PROJECT_DIR/gradlew || true
-
-        - name: Clean invalid java.home from gradle.properties
-        run: |
-          sed -i '/org.gradle.java.home/d' $PROJECT_DIR/gradle.properties
-          sed -i '/MaxMetaspaceSize/d' $PROJECT_DIR/gradle.properties
-          cat $PROJECT_DIR/gradle.properties
 
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
