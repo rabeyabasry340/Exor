@@ -18,31 +18,42 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Download and extract zip
+      - name: Download and extract zip into Exor_app
         run: |
           curl -L -o project.zip "${{ inputs.project_zip_url }}"
-          rm -rf /tmp/extracted
+          rm -rf /tmp/extracted Exor_app
           mkdir -p /tmp/extracted
           unzip -q project.zip -d /tmp/extracted
 
-          # Find real project root
           if [ -d /tmp/extracted/ExorMediaServer ]; then
             SRC=/tmp/extracted/ExorMediaServer
           else
             SRC=/tmp/extracted
           fi
 
-          echo "Copying from $SRC"
-          # Copy everything into repo root (overwrite)
-          cp -a "$SRC"/. .
-          # Remove junk
-          rm -rf .gradle app/build .kotlin local.properties
-          # Fix gradle.properties
-          if [ -f gradle.properties ]; then
-            sed -i '/org.gradle.java.home/d' gradle.properties
-            sed -i '/MaxMetaspaceSize/d' gradle.properties
-          fi
-          ls -la
+          echo "Copying from $SRC into Exor_app/"
+          mkdir -p Exor_app
+          cp -a "$SRC"/. Exor_app/
+          rm -rf Exor_app/.gradle Exor_app/app/build Exor_app/.kotlin Exor_app/local.properties
+          rm -f project.zip
 
-      - name: Commit and push to repo
-        run:
+          if [ -f Exor_app/gradle.properties ]; then
+            sed -i '/org.gradle.java.home/d' Exor_app/gradle.properties
+            sed -i '/MaxMetaspaceSize/d' Exor_app/gradle.properties
+          fi
+
+          echo "=== Exor_app contents ==="
+          ls -la Exor_app
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Exor_app
+          git status
+          if git diff --staged --quiet; then
+            echo "Nothing new to commit"
+          else
+            git commit -m "Import project into Exor_app/"
+            git push
+          fi
