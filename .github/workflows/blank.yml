@@ -1,0 +1,48 @@
+name: Import project zip into repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_zip_url:
+        description: 'Direct download URL of ExorMediaServer zip'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download and extract zip
+        run: |
+          curl -L -o project.zip "${{ inputs.project_zip_url }}"
+          rm -rf /tmp/extracted
+          mkdir -p /tmp/extracted
+          unzip -q project.zip -d /tmp/extracted
+
+          # Find real project root
+          if [ -d /tmp/extracted/ExorMediaServer ]; then
+            SRC=/tmp/extracted/ExorMediaServer
+          else
+            SRC=/tmp/extracted
+          fi
+
+          echo "Copying from $SRC"
+          # Copy everything into repo root (overwrite)
+          cp -a "$SRC"/. .
+          # Remove junk
+          rm -rf .gradle app/build .kotlin local.properties
+          # Fix gradle.properties
+          if [ -f gradle.properties ]; then
+            sed -i '/org.gradle.java.home/d' gradle.properties
+            sed -i '/MaxMetaspaceSize/d' gradle.properties
+          fi
+          ls -la
+
+      - name: Commit and push to repo
+        run:
