@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       project_zip_url:
-        description: 'Direct download URL of ExorMediaServer zip (GitHub Release asset link)'
+        description: 'Direct download URL of the project zip'
         required: true
         type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout (dummy – we use the uploaded zip)
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -23,20 +23,27 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK manually
+        run: |
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd /tmp
+          curl -sL -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q cmdtools.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
       - name: Install Android packages
         run: |
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
           yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
 
       - name: Download project zip
         run: |
-          echo "Downloading from: ${{ inputs.project_zip_url }}"
+          echo "Downloading: ${{ inputs.project_zip_url }}"
           curl -L -o project.zip "${{ inputs.project_zip_url }}"
           unzip -q project.zip -d project
-          # Find the real project root (handles zip with or without top folder)
           if [ -d project/ExorMediaServer ]; then
             echo "PROJECT_DIR=project/ExorMediaServer" >> $GITHUB_ENV
           else
@@ -45,18 +52,14 @@ jobs:
           ls -la $PROJECT_DIR
 
       - name: Create local.properties
-        run: |
-          echo "sdk.dir=$ANDROID_HOME" > $PROJECT_DIR/local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > $PROJECT_DIR/local.properties
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission
         run: chmod +x $PROJECT_DIR/gradlew || true
 
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -64,8 +67,3 @@ jobs:
           name: ExorMediaServer-debug-apk
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           retention-days: 14
-
-      - name: Show APK info
-        run: |
-          echo "=== Built APK ==="
-          ls -lh $PROJECT_DIR/app/build/outputs/apk/debug/
