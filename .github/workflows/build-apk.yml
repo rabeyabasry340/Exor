@@ -57,6 +57,12 @@ jobs:
       - name: Grant execute permission
         run: chmod +x $PROJECT_DIR/gradlew || true
 
+        - name: Clean invalid java.home from gradle.properties
+        run: |
+          sed -i '/org.gradle.java.home/d' $PROJECT_DIR/gradle.properties
+          sed -i '/MaxMetaspaceSize/d' $PROJECT_DIR/gradle.properties
+          cat $PROJECT_DIR/gradle.properties
+
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: ./gradlew assembleDebug --no-daemon --stacktrace
