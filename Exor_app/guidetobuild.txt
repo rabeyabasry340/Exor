@@ -1,0 +1,143 @@
+=====================================================================
+ EXOR MEDIA SERVER  -  BUILD GUIDE   (project part 1 of 2)
+=====================================================================
+
+TARGET DEVICE
+  Android 16 (API 36), aarch64 (arm64-v8a)
+  The app itself has no native code, so it runs on any ABI.
+  Only the bundled Termux APK has to match arm64-v8a.
+
+---------------------------------------------------------------------
+ 1. TOOLS / VERSIONS USED BY THIS PROJECT
+---------------------------------------------------------------------
+  JDK ................................. 17  (Android Studio's bundled JBR 17 is fine)
+  Gradle .............................. 8.11.1
+  Android Gradle Plugin (AGP) ......... 8.9.1
+  Kotlin .............................. 2.1.0
+  Kotlin Compose compiler plugin ...... 2.1.0  (org.jetbrains.kotlin.plugin.compose)
+  Compose BOM ......................... 2024.12.01
+  compileSdk .......................... 36   (Android 16)
+  targetSdk ........................... 36
+  minSdk .............................. 29   (Android 10)
+  Build-tools ......................... 36.0.0 (Gradle downloads it automatically)
+  Android SDK Platform ................ "Android 16.0 (API 36)" -> install in SDK Manager
+
+  (Versions were chosen from memory of what works together. I could not run a
+   build here, so if Gradle complains, see "IF THE BUILD FAILS" below.)
+
+---------------------------------------------------------------------
+ 2. HOW TO BUILD
+---------------------------------------------------------------------
+  A) Android Studio (easiest)
+     1. Extract the zip.  File > Open > select the ExorMediaServer folder.
+     2. Settings > Build > Gradle > Gradle JDK = 17.
+     3. Let it sync (internet needed once for dependencies).
+     4. Build > Build APK(s)   or   Run on your phone.
+
+  B) Command line
+     1. This zip contains gradle/wrapper/gradle-wrapper.properties but NOT the
+        gradle-wrapper.jar (cannot be generated offline here). Create it once:
+            gradle wrapper --gradle-version 8.11.1
+        (needs any installed Gradle) -- or just use Android Studio.
+     2. Create local.properties in the project root:
+            sdk.dir=/path/to/Android/Sdk
+     3. ./gradlew assembleDebug
+        APK -> app/build/outputs/apk/debug/app-debug.apk
+
+---------------------------------------------------------------------
+ 3. TERMUX  (you bring the APK, I only made the slot)
+---------------------------------------------------------------------
+  Version to use ...... Termux v0.118.3  (last stable GitHub release I know of)
+  File to download .... termux-app_v0.118.3+github-debug_arm64-v8a.apk
+  From ................ https://github.com/termux/termux-app/releases
+                        (GitHub build, NOT Play Store, NOT mixed with F-Droid)
+  Newer alternative ... v0.119.0-beta.x exists as a pre-release. Stable is safer.
+                        Check the releases page: a newer stable may exist now.
+
+  Where to put it:
+     app/src/main/assets/termux/
+        put_here_termux_v0.118.3.info   <- empty placeholder, delete it
+        termux.apk                      <- your downloaded APK, renamed to this
+                                           (any *.apk name in that folder works)
+
+  The app copies it to its cache and opens Android's installer when you press
+  Settings > "Install bundled Termux". The APK is stored uncompressed (see
+  noCompress in app/build.gradle.kts). It adds ~30-35 MB to your APK.
+
+  Why bundled Termux is a separate APK and not "inside" the app:
+  Termux must be its own app (package com.termux) because its Linux userland
+  is hardcoded to /data/data/com.termux. It cannot live inside another app.
+
+  FIRST RUN OF TERMUX (one time)
+     1. Install it from Exor (Settings > Termux), open the terminal once and wait
+        for the bootstrap to finish.
+     2. In Exor: Settings > "Copy setup cmds", paste in Termux, press Enter.
+        That sets allow-external-apps=true and installs python.
+     3. Back in Exor: Settings > "Allow running Termux commands" (grant),
+        then "Run example_server.py in Termux".
+     If Android says the RUN_COMMAND permission cannot be granted, uninstall
+     Exor, install Termux first, then reinstall Exor.
+
+---------------------------------------------------------------------
+ 4. ANDROID 16 NOTES
+---------------------------------------------------------------------
+  * Foreground service type "specialUse" is used (declared in the manifest).
+  * On first launch grant: media (videos/audio/images) + notifications.
+    "Display over other apps" is asked when you press "Floating window".
+  * If you choose "Selected photos only" in the Android 14+ media dialog, only
+    those files are visible to the TV. Choose "Allow all".
+  * Android 16/17 are rolling out a "local network access" permission. If the
+    TV cannot find the server after an Android update, check
+    Settings > Apps > Exor > Permissions for a Nearby/Local network entry.
+  * Disable battery optimization for Exor if the TV loses it with the screen off.
+
+---------------------------------------------------------------------
+ 5. HOW IT BEHAVES (calm by design)
+---------------------------------------------------------------------
+  * Idle server = sockets waiting. No scanning, no polling, no timers except
+    one SSDP re-announce every 15 minutes.
+  * Wi-Fi lock + CPU wake lock are held ONLY while a video/music stream is active.
+  * Max 6 HTTP threads, 64 KB copy buffer, thumbnail cache capped at 4 MB.
+  * Library is read from MediaStore on demand, 300 items per Browse page max.
+  * Device scan (renderers) runs only when you tap refresh, 4 seconds.
+
+---------------------------------------------------------------------
+ 6. TESTING ON THE BRAVIA
+---------------------------------------------------------------------
+  1. Phone + TV on the same Wi-Fi.
+  2. Open Exor, grant permissions, press Start.
+  3. TV: Home > Media Player > pick "Exor Media Server (<your model>)".
+  4. Browse Videos / Music / Photos. Seeking uses HTTP Range, no transcoding.
+     (Formats the TV cannot decode, e.g. some MKV audio, will not play: part 2
+      has no transcoder either; that is intentional to stay light.)
+
+---------------------------------------------------------------------
+ 7. IF THE BUILD FAILS
+---------------------------------------------------------------------
+  * "Unsupported Gradle / AGP"  -> use exactly Gradle 8.11.1 with AGP 8.9.1.
+  * "compileSdk 36 not found"    -> SDK Manager: install Android 16 (API 36).
+  * Compose compiler errors      -> make sure the Kotlin and
+        org.jetbrains.kotlin.plugin.compose versions are BOTH 2.1.0.
+  * Send me the first red error lines from the Build window and I will fix them
+    in part 2.
+
+---------------------------------------------------------------------
+ 8. WHAT IS IN PART 1 / WHAT PART 2 WILL ADD
+---------------------------------------------------------------------
+  DONE (part 1)
+   - Gradle project, manifest, permissions, theme, launcher icon
+   - UPnP MediaServer: SSDP, device description, ContentDirectory (Browse),
+     ConnectionManager, GENA eventing, HTTP Range streaming, thumbnails
+   - Library tree: Videos / Music / Photos (all, by folder, albums, artists, recent)
+   - Foreground service with lock handling + network change handling
+   - Renderer scan (Sony BRAVIA / receivers) + home screen from your design
+   - Floating window (overlay), Termux install / open terminal / run script
+   - Settings screen
+
+  PART 2 (next order)
+   - Push-casting to a renderer (AVTransport Play/Pause/Seek/Stop, volume)
+   - Browse screens for Videos / Music / Photos inside the app
+   - Subtitles (.srt next to the video), search action, sort criteria
+   - File-system folder view (non-MediaStore files)
+   - Your real Termux example script + script manager
+   - Polish, error handling, unit tests, release config
